@@ -260,6 +260,8 @@ elif result["is_safe"]:
         unsafe_allow_html=True,
     )
 
+    st.success("현재 입력된 좌표는 안전 구역 안에 있습니다.")
+
 else:
     st.markdown(
         f"""
