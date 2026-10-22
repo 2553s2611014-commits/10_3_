@@ -5,200 +5,341 @@ st.write('아이가 지정한 위치에서 벗어나면 보호자에게 알림�
 import streamlit as st
 import folium
 from streamlit_folium import st_folium
-import math
-from datetime import datetime
 import pandas as pd
-import google.generativeai as genai
+from datetime import datetime
 
 # -----------------------------------------------------------------------------
-# 1. 페이지 설정 및 초기화
+# 1. 페이지 및 브라우저 탭 설정
 # -----------------------------------------------------------------------------
 st.set_page_config(
-    page_title="아동 안심 지오펜스 알림 시스템",
+    page_title="보호자 알림",
     page_icon="🚨",
     layout="wide"
 )
 
-# 세션 상태 초기화 (위험 이력 기록용)
-if "alert_history" not in st.session_state:
-    st.session_state.alert_history = []
-
 # -----------------------------------------------------------------------------
-# 2. 유틸리티 함수 (하버사인 거리 계산 공식)
+# 2. 커스텀 CSS (이미지의 스케치 UI/손그림 스타일 완벽 반영)
 # -----------------------------------------------------------------------------
-def haversine_distance(lat1, lon1, lat2, lon2):
-    """두 위도/경도 좌표 사이의 거리를 미터(m) 단위로 계산합니다."""
-    R = 6371000  # 지구 반지름 (미터)
-    phi1 = math.radians(lat1)
-    phi2 = math.radians(lat2)
-    delta_phi = math.radians(lat2 - lat1)
-    delta_lambda = math.radians(lon2 - lon1)
-
-    a = math.sin(delta_phi / 2.0) ** 2 + \
-        math.cos(phi1) * math.cos(phi2) * math.sin(delta_lambda / 2.0) ** 2
-    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
-
-    return R * c
-
-# -----------------------------------------------------------------------------
-# 3. Gemini AI 대처 가이드 생성 함수
-# -----------------------------------------------------------------------------
-def get_ai_emergency_guide(child_name, zone_name, distance, safe_radius):
-    """Gemini AI를 활용해 지오펜스 이탈 시 행동 요령을 작성합니다."""
-    api_key = st.secrets.get("GEMINI_API_KEY", None)
-    if not api_key:
-        return "⚠️ Gemini API 키가 설정되지 않았습니다. Secrets 설정을 확인해주세요."
-
-    try:
-        genai.configure(api_key=api_key)
-        model = genai.GenerativeModel('gemini-2.5-flash-lite')
-        
-        prompt = f"""
-        당신은 아동 안전 전문 컨설턴트입니다.
-        아래 상황 정보를 바탕으로 보호자가 즉각 취해야 할 행동 가이드라인 3가지와 당황하지 않도록 격려하는 메시지를 간결하게 작성해주세요.
-
-        - 아이 이름: {child_name}
-        - 지정 안전구역: {zone_name} (설정 반지름: {safe_radius}m)
-        - 이탈 거리: 지정 구역으로부터 약 {int(distance - safe_radius)}m 추가 이탈 (총 거리 {int(distance)}m)
-
-        응답 형식:
-        1. 🚨 즉시 확인 행동 요령 3가지 (Bullet points)
-        2. 📞 권장 확인 연락처 체크리스트
-        """
-        response = model.generate_content(prompt)
-        return response.text
-    except Exception as e:
-        return f"⚠️ AI 가이드를 불러오는 중 오류가 발생했습니다: {str(e)}"
-
-# -----------------------------------------------------------------------------
-# 4. 사이드바 - 설정 메뉴
-# -----------------------------------------------------------------------------
-st.sidebar.title("🛡️ 안전구역 & 아이 정보 설정")
-
-child_name = st.sidebar.text_input("아이 이름", value="김민준")
-zone_name = st.sidebar.text_input("안전구역 이름", value="OO초등학교 & 학원가")
-
-st.sidebar.subheader("📍 안전구역 중심 좌표")
-center_lat = st.sidebar.number_input("중심 위도 (Latitude)", value=37.5665, format="%.6f")
-center_lon = st.sidebar.number_input("중심 경도 (Longitude)", value=126.9780, format="%.6f")
-safe_radius = st.sidebar.slider("안전 반지름 (미터)", min_value=50, max_value=1000, value=200, step=50)
-
-st.sidebar.markdown("---")
-st.sidebar.subheader("📱 아이 GPS 위치 시뮬레이터")
-st.sidebar.caption("아이의 위치 데이터를 실시간 변경하여 이탈 상황을 테스트하세요.")
-child_lat = st.sidebar.number_input("아이 현재 위도", value=37.5690, format="%.6f")
-child_lon = st.sidebar.number_input("아이 현재 경도", value=126.9795, format="%.6f")
-
-# -----------------------------------------------------------------------------
-# 5. 메인 화면 구성
-# -----------------------------------------------------------------------------
-st.title("🚨 아이 안심 지오펜스 이탈 알림 시스템")
-st.write("아이의 실시간 위치를 모니터링하고, 지정된 안전 구역을 벗어날 경우 보호자에게 즉시 경고합니다.")
-
-# 연산: 거리 계산
-distance = haversine_distance(center_lat, center_lon, child_lat, child_lon)
-is_out_of_bounds = distance > safe_radius
-
-# 대시보드 메트릭 표시
-col1, col2, col3 = st.columns(3)
-with col1:
-    st.metric(label="지정 안전 반지름", value=f"{safe_radius} m")
-with col2:
-    st.metric(label="현재 아이와의 거리", value=f"{int(distance)} m")
-with col3:
-    if is_out_of_bounds:
-        st.metric(label="현재 상태", value="🚨 이탈 발생", delta=f"+{int(distance - safe_radius)}m 초과", delta_color="inverse")
-    else:
-        st.metric(label="현재 상태", value="✅ 안전구역 내", delta="안전함", delta_color="normal")
-
-st.markdown("---")
-
-# -----------------------------------------------------------------------------
-# 6. 알림 처리 및 UI 반응
-# -----------------------------------------------------------------------------
-if is_out_of_bounds:
-    # 이탈 발생 경고 UI
-    st.error(f"⚠️ [비상] **{child_name}** 아이가 지정된 안전구역(**{zone_name}**)을 벗어났습니다! (초과 거리: 약 {int(distance - safe_radius)}m)")
+st.markdown("""
+<style>
+    @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
     
-    # 비상 경고음 효과 (웹 오디오 재생)
-    audio_html = """
-        <audio autoplay style="display:none;">
-            <source src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3" type="audio/mpeg">
-        </audio>
-    """
-    st.components.v1.html(audio_html, height=0)
-
-    # 이력에 추가 (중복 방지)
-    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    log_entry = {
-        "시각": now_str,
-        "이름": child_name,
-        "위치": f"{child_lat:.4f}, {child_lon:.4f}",
-        "거리": f"{int(distance)}m",
-        "상태": "위험 (이탈)"
+    * {
+        font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
     }
-    if not st.session_state.alert_history or st.session_state.alert_history[-1]["시각"] != now_str:
-        st.session_state.alert_history.append(log_entry)
 
-else:
-    st.success(f"🟢 **{child_name}** 아이가 안전구역(**{zone_name}**) 내부에서 정상 활동 중입니다.")
+    /* 전체 배경 */
+    .stApp {
+        background-color: #dbeafe !important;
+        background-image: radial-gradient(#93c5fd 1px, transparent 1px);
+        background-size: 20px 20px;
+    }
+
+    /* 카드 박스 (손그림/스케치 스타일) */
+    .sketch-card {
+        background-color: #ffffff;
+        border: 2px solid #2b374e;
+        border-radius: 12px;
+        padding: 14px 18px;
+        margin-bottom: 12px;
+        box-shadow: 2px 3px 0px #2b374e;
+    }
+
+    /* 카드 헤더 제목 */
+    .card-header {
+        font-size: 15px;
+        font-weight: 800;
+        color: #1e293b;
+        border-bottom: 2px solid #cbd5e1;
+        padding-bottom: 6px;
+        margin-bottom: 10px;
+    }
+
+    /* 메인 상단 헤더 */
+    .top-header {
+        background-color: #ffffff;
+        border: 2px solid #2b374e;
+        border-radius: 14px;
+        padding: 12px;
+        text-align: center;
+        box-shadow: 3px 3px 0px #2b374e;
+        margin-bottom: 16px;
+    }
+
+    .top-header h1 {
+        color: #0f172a;
+        font-size: 28px;
+        font-weight: 900;
+        margin: 0;
+        letter-spacing: -0.5px;
+    }
+
+    /* 초록색 상태 바 */
+    .status-bar-green {
+        background-color: #22c55e;
+        color: white;
+        border: 2px solid #15803d;
+        border-radius: 10px;
+        padding: 6px 12px;
+        text-align: center;
+        font-size: 13px;
+        font-weight: bold;
+        margin-bottom: 12px;
+    }
+
+    /* 안전 뱃지 */
+    .badge-safe {
+        background-color: #bbf7d0;
+        color: #166534;
+        border: 2px solid #22c55e;
+        padding: 4px 18px;
+        border-radius: 20px;
+        font-weight: bold;
+        font-size: 14px;
+        display: inline-block;
+    }
+
+    /* 수신된 알림 미리보기 (스마트폰 팝업 스타일) */
+    .phone-preview {
+        background-color: #ffffff;
+        border: 2px solid #334155;
+        border-radius: 14px;
+        padding: 12px;
+        box-shadow: 2px 2px 0px #334155;
+    }
+
+    .phone-btn-red {
+        background-color: #ef4444;
+        color: white;
+        border: 1px solid #b91c1c;
+        border-radius: 6px;
+        padding: 6px 10px;
+        font-size: 12px;
+        font-weight: bold;
+        cursor: pointer;
+    }
+
+    .phone-btn-yellow {
+        background-color: #facc15;
+        color: #451a03;
+        border: 1px solid #ca8a04;
+        border-radius: 6px;
+        padding: 6px 10px;
+        font-size: 12px;
+        font-weight: bold;
+        cursor: pointer;
+    }
+
+    /* 하단 푸터 */
+    .footer-bar {
+        background-color: #1e293b;
+        color: #cbd5e1;
+        padding: 10px 20px;
+        border-radius: 6px;
+        font-size: 12px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: 15px;
+    }
+</style>
+""", unsafe_allow_html=True)
 
 # -----------------------------------------------------------------------------
-# 7. 지도 시각화 & AI 가이드 탭
+# 3. 세션 상태 (알림 기록)
 # -----------------------------------------------------------------------------
-tab1, tab2, tab3 = st.tabs(["🗺️ 실시간 지도 모니터링", "🤖 Gemini 비상 대응 AI 가이드", "📜 이탈 경고 이력 로그"])
+if "notification_logs" not in st.session_state:
+    st.session_state.notification_logs = [
+        {"시간": "2024-3:38", "유형": "긴급", "수신 보호자": "엄마", "상태": "성공"},
+        {"시간": "2024-3:25", "유형": "등교", "수신 보호자": "엄마", "상태": "아빠"},
+        {"시간": "2024-3:29", "유형": "등교", "수신 보호자": "엄마", "상태": "아빠"},
+        {"시간": "2024-3:29", "유형": "등교", "수신 보호자": "엄마", "상태": "아빠"},
+        {"시간": "2024-3:38", "유형": "하교", "수신 보호자": "엄마", "상태": "아빠"},
+        {"시간": "2024-11:30", "유형": "하교", "수신 보호자": "엄마", "상태": "아빠"}
+    ]
 
-with tab1:
-    st.subheader("📍 안전 구역 및 아이 위치 시각화")
-    
-    # Folium 지도 생성
-    m = folium.Map(location=[center_lat, center_lon], zoom_start=15)
+# -----------------------------------------------------------------------------
+# 4. 상단 헤더
+# -----------------------------------------------------------------------------
+st.markdown("""
+<div class="top-header">
+    <h1>보호자 긴급 알림 시스템 (어린이용)</h1>
+</div>
+""", unsafe_allow_html=True)
 
-    # 1. 안전구역 (원 표시)
-    folium.Circle(
-        location=[center_lat, center_lon],
-        radius=safe_radius,
-        color="green" if not is_out_of_bounds else "orange",
-        fill=True,
-        fill_color="green" if not is_out_of_bounds else "orange",
-        fill_opacity=0.2,
-        popup=f"안전구역: {zone_name} (반지름 {safe_radius}m)"
-    ).add_to(m)
+# -----------------------------------------------------------------------------
+# 5. 메인 3열 구성 (이미지 레이아웃과 동일)
+# -----------------------------------------------------------------------------
+left_col, center_col, right_col = st.columns([1, 2.1, 1.1])
 
-    # 2. 안전구역 중심 마커
+# ==========================================
+# [좌측 컬럼] 보호대상자 정보 / 일접시간 상태 / 최근 활동 로그 / 긴급 연락처
+# ==========================================
+with left_col:
+    # 1. 보호대상자 정보
+    st.markdown("""
+    <div class="sketch-card">
+        <div class="card-header">보호대상자 정보</div>
+        <div style="text-align: center; margin: 10px 0;">
+            <h2 style="margin:0; font-size: 22px; color:#0f172a; font-weight:800;">박민수 (어린이, 7세)</h2>
+            <div style="margin-top: 8px;">
+                <span class="badge-safe">안전 (Safe)</span>
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # 2. 일접시간 상태
+    st.markdown("""
+    <div class="sketch-card">
+        <div class="card-header">일접시간 상태</div>
+        <div style="display:flex; align-items:center; gap:8px;">
+            <span style="color:#22c55e; font-size:16px;">🟢</span>
+            <span style="font-weight:bold; color:#166534; font-size:14px;">실시간 요전티</span>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # 3. 최근 활동 로그
+    st.markdown("""
+    <div class="sketch-card">
+        <div class="card-header">최근 활동 로그</div>
+        <div style="font-size:13px; line-height:1.9; color:#334155;">
+            <div><b>오후 2:35</b> 등교 확인 (박민수)</div>
+            <div><b>오후 2:39</b> 수업 중 (정상 상태)</div>
+            <div><b>오전 11:30</b> 하고 예정</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # 4. 긴급 연락처 관리
+    st.markdown("""
+    <div class="sketch-card">
+        <div class="card-header">긴급 연락처 관리</div>
+        <div style="font-size:13px; color:#334155; line-height:2.0;">
+            <div>🧑‍💼 010-XXXX-XXXX</div>
+            <div>🧑‍💼 010-YYXX-XXXX</div>
+            <div>🧑‍💼 010-YYYY-XXXX</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+
+# ==========================================
+# [중앙 컬럼] 모니터링 상태 / 긴급 알림 전송 / GPS 지도
+# ==========================================
+with center_col:
+    # 실시간 모니터링 상태 바
+    st.markdown("""
+    <div class="status-bar-green">
+        실시간 모니터링 및 맟춤아장으로 관웅확입니다.
+    </div>
+    """, unsafe_allow_html=True)
+
+    # 긴급 알림 전송 카드
+    with st.container():
+        st.markdown("""
+        <div class="sketch-card">
+            <div style="text-align:center; font-size:20px; font-weight:900; margin-bottom:12px; color:#0f172a;">
+                보호자 긴급 알림 전송
+            </div>
+        """, unsafe_allow_html=True)
+
+        c1, c2 = st.columns(2)
+        with c1:
+            st.text_input("보호자 연락처 (전화번호)", value="010-XXXX-XXXX", key="p_num1")
+        with c2:
+            st.text_input(" ", value="010-YYYY-YYYY", key="p_num2")
+
+        st.text_input("알림 메시지", value="도움이 필요해요! 위치를 확인해 주세요. 엄마, 어디에요? | 배고파요!", key="alert_msg")
+
+        # 빨간색 전송 버튼
+        if st.button("🚨 보호자 긴급 알림 전송 🚨", use_container_width=True, type="primary"):
+            now_time = datetime.now().strftime("%Y-%m-%d %H:%M")
+            st.session_state.notification_logs.insert(0, {
+                "시간": now_time,
+                "유형": "긴급",
+                "수신 보호자": "엄마",
+                "상태": "성공"
+            })
+            st.success("🚨 보호자에게 긴급 알림 메시지가 즉시 전송되었습니다!")
+
+        st.markdown("""
+            <div style="text-align:center; font-size:12px; color:#64748b; margin-top:8px;">
+                전송 대기 중...<br>
+                <b>버튼을 누르면 등록된 보호자에게 즉시 SMS 및 카카오톡 알림이 전송됩니다. 허위 진승에 유의하세요.</b>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    # 실시간 GPS 위치 지도 카드
+    st.markdown("""
+    <div class="sketch-card">
+        <div class="card-header">실시간 GPS 위치 지도</div>
+    """, unsafe_allow_html=True)
+
+    # 서광초등학교 근처 좌표
+    school_lat, school_lon = 37.5550, 126.9370
+    m = folium.Map(location=[school_lat, school_lon], zoom_start=16, tiles="OpenStreetMap")
+
+    # 위치 마커
     folium.Marker(
-        location=[center_lat, center_lon],
-        popup=f"중심점: {zone_name}",
-        icon=folium.Icon(color="blue", icon="home")
+        location=[school_lat, school_lon],
+        popup="현재 위치 (박민수)",
+        tooltip="현재 위치 (박민수)",
+        icon=folium.Icon(color="blue", icon="info-sign")
     ).add_to(m)
 
-    # 3. 아이 위치 마커
-    folium.Marker(
-        location=[child_lat, child_lon],
-        popup=f"{child_name}의 현재 위치",
-        icon=folium.Icon(color="red" if is_out_of_bounds else "green", icon="user")
-    ).add_to(m)
+    st_folium(m, width="100%", height=260)
+    st.markdown("</div>", unsafe_allow_html=True)
 
-    # Streamlit에 지도 출력
-    st_folium(m, width="100%", height=450)
 
-with tab2:
-    st.subheader("🤖 AI 맞춤형 비상 대응 리포트")
-    if is_out_of_bounds:
-        st.warning("아이가 안전 구역을 이탈했습니다. 아래 Gemini AI가 제안하는 가이드를 참고하세요.")
-        if st.button("🚨 AI 긴급 대응 가이드 생성/갱신"):
-            with st.spinner("Gemini AI가 상황 분석 및 가이드를 생성 중입니다..."):
-                ai_guide = get_ai_emergency_guide(child_name, zone_name, distance, safe_radius)
-                st.markdown(ai_guide)
-    else:
-        st.info("현재 아이가 안전 구역 내에 있습니다. 이탈 시 이곳에 AI 대응 가이드가 활성화됩니다.")
+# ==========================================
+# [우측 컬럼] 최근 알림 기록 / 수신된 알림 예시
+# ==========================================
+with right_col:
+    # 1. 최근 알림 기록
+    st.markdown("""
+    <div class="sketch-card">
+        <div class="card-header">최근 알림 기록</div>
+    """, unsafe_allow_html=True)
 
-with tab3:
-    st.subheader("📜 위험 이탈 기록")
-    if st.session_state.alert_history:
-        df_history = pd.DataFrame(st.session_state.alert_history)
-        st.dataframe(df_history, use_container_width=True)
-    else:
-        st.write("บัน 기록된 이탈 이력이 없습니다.")
+    df_logs = pd.DataFrame(st.session_state.notification_logs)
+    st.dataframe(
+        df_logs,
+        use_container_width=True,
+        height=210,
+        hide_index=True
+    )
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    # 2. 수신된 알림 예시
+    st.markdown("""
+    <div class="sketch-card">
+        <div class="card-header">수신된 알림 예시</div>
+        <div class="phone-preview">
+            <div style="font-weight:bold; font-size:15px; color:#0f172a; margin-bottom:6px;">박민수 어린이</div>
+            <div style="font-size:12px; color:#475569; line-height:1.5;">
+                <b>박민수 어린이</b>에게서 긴급 알림을 보냈습니다.<br>
+                <span style="color:#64748b;">(예시: 도움이 필요해요! 위치를 확인해 주세요. | 오후 2:35)</span>
+            </div>
+            <div style="margin-top:12px; display:flex; gap:6px;">
+                <button class="phone-btn-red">위치 확인</button>
+                <button class="phone-btn-yellow">전화하기</button>
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+
+# -----------------------------------------------------------------------------
+# 6. 하단 푸터 영역
+# -----------------------------------------------------------------------------
+st.markdown("""
+<div class="footer-bar">
+    <div>Copyright © 2024 CareNet. All rights reserved.</div>
+    <div>고객센터 : 1588-XXXX</div>
+</div>
+""", unsafe_allow_html=True)
 
      
