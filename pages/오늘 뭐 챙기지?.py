@@ -236,6 +236,8 @@ elif menu == "📝 과목별 준비물 설정":
             if item.strip()
         ]
 
+        
         data["subjects"][selected_subject] = list(dict.fromkeys(items))
         save_data(data)
-        st.success(f"{selected_subject} 준비물을 저장했
+        st.success(f"{selected_subject} 준비물을 저장했어요!")
+        st.rerun()
