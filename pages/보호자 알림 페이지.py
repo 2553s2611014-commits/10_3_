@@ -1,6 +1,6 @@
 import streamlit as st
-st.title('아아아아')
-st.write('ㅏ라라')
+st.title('보호자 알림 페이지')
+st.write('아이가 지정한 위치에서 벗어나면 보호자에게 알림이 가는 기능')
 로그인
 무료로 회원가입
 나의 말:
