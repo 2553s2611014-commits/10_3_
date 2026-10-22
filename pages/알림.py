@@ -83,20 +83,10 @@ div.stButton > button {
     color: #bb6682;
     font-family: 'Jua', sans-serif;
     font-size: 1rem;
-    transition: 0.2s;
-}
-div.stButton > button:hover {
-    background: #ffe4ed;
-    border-color: #e99bb4;
-    color: #a74f6d;
 }
 div.stButton > button[kind="primary"] {
     background: #e981a0;
     border: 2px solid #e981a0;
-    color: white;
-}
-div.stButton > button[kind="primary"]:hover {
-    background: #d96789;
     color: white;
 }
 div[data-testid="stVerticalBlockBorderWrapper"] {
@@ -104,13 +94,6 @@ div[data-testid="stVerticalBlockBorderWrapper"] {
     border-radius: 24px;
     border-color: #f6dce3;
 }
-div[data-testid="stMetric"] {
-    background: white;
-    border: 2px solid #f6dce3;
-    padding: 15px;
-    border-radius: 20px;
-}
-hr { border-color: #f4d6df; }
 .small-note {
     color: #a17b86;
     font-size: .9rem;
@@ -126,7 +109,7 @@ if "help_time" not in st.session_state:
 if "help_message" not in st.session_state:
     st.session_state.help_message = "도움이 필요해요. 저를 확인해 주세요."
 
-# ---------- 상단 배너 ----------
+# ---------- 상단 ----------
 st.markdown("""
 <div class="hero">
     <div style="font-size:2.2rem">🍓 🐰 🌷</div>
@@ -147,8 +130,8 @@ with st.sidebar:
     st.markdown("---")
     st.markdown("### 🍀 안전 약속")
     st.write("🌷 안전 구역 확인하기")
-    st.write("🍓 위치를 바르게 입력하기")
-    st.write("🧸 어려우면 어른에게 알리기")
+    st.write("🎤 마이크는 직접 허용하기")
+    st.write("🆘 위험하면 어른에게 알리기")
     st.markdown("---")
     st.caption("made with ♡ · 안심 탐험대")
 
@@ -166,9 +149,10 @@ def distance_m(lat1, lon1, lat2, lon2):
     a = min(1.0, max(0.0, a))
     return 2 * r * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
-# ---------- 본문 배치 ----------
+# ---------- 화면 배치 ----------
 left, right = st.columns([1.15, 0.85], gap="large")
 
+# ---------- 안전 지도 ----------
 with left:
     st.markdown("""
     <div class="sticker">
@@ -193,8 +177,10 @@ with left:
 
         radius = st.slider(
             "💚 안전 구역 크기",
-            min_value=20, max_value=1000,
-            value=100, step=10,
+            min_value=20,
+            max_value=1000,
+            value=100,
+            step=10,
             format="%d m"
         )
 
@@ -224,7 +210,9 @@ with left:
     )
 
     if valid:
-        dist = distance_m(park_lat, park_lon, child_lat, child_lon)
+        dist = distance_m(
+            park_lat, park_lon, child_lat, child_lon
+        )
 
         if dist <= radius:
             st.markdown(f"""
@@ -256,12 +244,13 @@ with left:
     else:
         st.error("위도와 경도 값을 확인해 주세요.")
 
+# ---------- 도움 요청과 마이크 ----------
 with right:
     st.markdown("""
     <div class="sticker">
         <h3>🆘 도움 요청 우체통</h3>
         <div class="small-note">
-        도움이 필요할 때 요청 상태를 남길 수 있어요.
+        도움이 필요하면 요청을 등록하고, 원할 때 짧은 소리를 녹음해 확인해요.
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -270,8 +259,8 @@ with right:
         st.markdown("""
         <div class="status-danger">
             <div style="font-size:2.5rem">🧸 💌</div>
-            <h3>괜찮아, 도움을 요청해도 돼!</h3>
-            아래 버튼을 눌러 요청을 등록해 줘.
+            <h3>도움이 필요하나요?</h3>
+            아래에서 도움 요청을 등록할 수 있어요.
         </div>
         """, unsafe_allow_html=True)
 
@@ -283,7 +272,7 @@ with right:
         )
 
         if st.button(
-            "🆘 도움 요청 보내기",
+            "🆘 도움 요청하기",
             type="primary",
             use_container_width=True
         ):
@@ -296,19 +285,49 @@ with right:
         if st.session_state.help_requested:
             st.markdown(f"""
             <div class="status-danger">
-                <h3>💌 요청 상태가 등록됐어요!</h3>
+                <h3>💌 도움 요청이 등록됐어요!</h3>
                 시간: {st.session_state.help_time}<br>
                 내용: {st.session_state.help_message}
             </div>
             """, unsafe_allow_html=True)
+
             st.warning(
-                "이 요청은 현재 앱 화면에만 저장돼요. "
-                "다른 휴대전화로 실제 알림이 전송되지는 않아요."
+                "요청은 현재 앱 화면에 표시됩니다. "
+                "보호자 휴대전화로 자동 전송되지는 않습니다."
             )
+
             if st.button("확인 완료 ♡", use_container_width=True):
                 st.session_state.help_requested = False
                 st.session_state.help_time = ""
                 st.rerun()
+
+        st.markdown("---")
+        st.markdown("### 🎤 마이크로 소리 확인하기")
+        st.info(
+            "주변 소리를 녹음하려면 직접 시작 버튼을 누르고 "
+            "브라우저의 마이크 권한을 허용해 주세요. "
+            "다른 사람에게 녹음 사실을 알리고 동의를 받아 주세요."
+        )
+
+        try:
+            audio = st.audio_input(
+                "🎙️ 녹음 시작하기",
+                sample_rate=16000,
+                key="child_audio"
+            )
+
+            if audio is not None:
+                st.success("🔴 녹음이 완료됐어요!")
+                st.audio(audio, format="audio/wav")
+                st.caption(
+                    "녹음된 소리는 이 화면에서 재생할 수 있어요. "
+                    "보호자에게 전송되지는 않습니다."
+                )
+        except Exception:
+            st.warning(
+                "현재 Streamlit 버전에서 마이크 입력을 지원하지 않을 수 있어요. "
+                "requirements.txt에 streamlit을 입력하고 앱을 다시 실행해 주세요."
+            )
 
     else:
         st.markdown("""
@@ -330,7 +349,13 @@ with right:
         else:
             st.info("현재 등록된 도움 요청이 없어요. 🌷")
 
-        st.caption("현재 버전은 기기 간 자동 공유를 지원하지 않아요.")
+        st.markdown("""
+        <div class="sticker">
+            <h3>🎧 주변 소리 기능 안내</h3>
+            아이 기기에서 직접 녹음한 소리는 현재 해당 화면에서만 재생할 수 있어요.
+            보호자 기기로 실시간 전달하려면 별도의 기기 연결 기능이 필요해요.
+        </div>
+        """, unsafe_allow_html=True)
 
 # ---------- 하단 ----------
 st.markdown("---")
@@ -348,7 +373,7 @@ st.markdown("""
     안심 탐험대와 함께하는 작은 모험 ♡
     </p>
     <div style="font-size:.8rem;color:#a17b86">
-    학습용 시제품 · 실제 GPS 추적이나 긴급 알림 서비스가 아닙니다.
+    학습용 시제품 · 실제 GPS 추적이나 기기 간 긴급 알림은 지원하지 않습니다.
     </div>
 </div>
 """, unsafe_allow_html=True)
