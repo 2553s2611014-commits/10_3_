@@ -1,4 +1,3 @@
-python
 import streamlit as st
 
 import math
@@ -312,4 +311,3 @@ st.warning(
 )
 
 st.caption("꼬마 안전 지킴이 · 어린이 안전 위치 확인 서비스")
-```
