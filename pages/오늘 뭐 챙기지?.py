@@ -1,4 +1,4 @@
-import streamlit as st
+mport streamlit as st
 import json
 from pathlib import Path
 from datetime import date
@@ -238,4 +238,4 @@ elif menu == "📝 과목별 준비물 설정":
 
         data["subjects"][selected_subject] = list(dict.fromkeys(items))
         save_data(data)
-        st.success(f"{selected_subject} 준비물을 저장했어요!")
+        st.success(f"{selected_subject} 준비물을 저장했
