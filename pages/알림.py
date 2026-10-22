@@ -5,576 +5,650 @@ from datetime import datetime
 import pandas as pd
 import streamlit as st
 
+# -----------------------------
+# 기본 설정
+# -----------------------------
 st.set_page_config(
-    page_title="안심 탐험대 ♡",
+    page_title="안심 탐험대 🍓",
     page_icon="🍓",
     layout="wide",
+    initial_sidebar_state="expanded",
 )
 
-# ──────────────── 🌷 디자인 ────────────────
+# -----------------------------
+# 다이어리 디자인 CSS
+# -----------------------------
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Jua&family=Nunito:wght@400;600;700;800;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Jua&family=Nunito:wght@400;600;700;800&display=swap');
 
 :root {
-    --pink: #e982a2;
-    --pink-dark: #bd6483;
-    --pink-light: #ffe5ed;
-    --cream: #fff9f1;
-    --green: #dcebd0;
-    --green-dark: #537650;
-    --ink: #654c55;
+    --pink: #f3a6bd;
+    --dark-pink: #cf6f91;
+    --cream: #fffaf0;
+    --green: #b9d7a8;
+    --ink: #62505a;
 }
 
 .stApp {
     background:
-        radial-gradient(circle at 5% 8%, #ffe3ec 0, transparent 19%),
-        radial-gradient(circle at 95% 22%, #fff0c9 0, transparent 18%),
-        #fff9f5;
+        radial-gradient(ellipse at 10% 5%, #ffe4ec 0%, transparent 30%),
+        radial-gradient(ellipse at 90% 70%, #eaf3dd 0%, transparent 28%),
+        #fffaf2;
     color: var(--ink);
     font-family: 'Nunito', sans-serif;
 }
 
+h1, h2, h3, h4, p, label, span, div {
+    font-family: 'Nunito', sans-serif;
+}
+
+h1, h2, h3 {
+    color: #9c5874;
+}
+
+#MainMenu, footer {
+    visibility: hidden;
+}
+
+header[data-testid="stHeader"] {
+    background: transparent;
+}
+
 .block-container {
-    max-width: 1250px;
-    padding-top: 1.8rem;
+    max-width: 1400px;
+    padding-top: 2rem;
     padding-bottom: 3rem;
 }
 
-h1, h2, h3, h4, label, button {
-    font-family: 'Jua', sans-serif !important;
-}
-
-h1 { color: var(--pink-dark); }
-h2, h3, h4 { color: #bd718a; }
-
 [data-testid="stSidebar"] {
-    background: linear-gradient(180deg, #ffe2eb, #fff0dc);
-    border-right: 2px solid white;
+    background: #fff0f4;
+    border-right: 2px dashed #efb5c8;
 }
 
-[data-testid="stSidebar"] h1,
 [data-testid="stSidebar"] h2,
 [data-testid="stSidebar"] h3 {
-    color: #bd6483;
+    font-family: 'Jua', sans-serif;
 }
 
 .hero {
     position: relative;
     overflow: hidden;
-    background: linear-gradient(120deg, #ffd7e4 0%, #fff0ce 58%, #e5f1d9 100%);
-    padding: 34px 30px;
+    padding: 30px 28px;
     border: 3px solid white;
-    border-radius: 32px;
-    box-shadow: 0 8px 0 #f4cbd8, 0 15px 35px #d98ba51b;
-    margin-bottom: 26px;
+    border-radius: 28px;
+    background: linear-gradient(125deg, #f8c7d6, #fff0cb 58%, #d8e9c9);
+    box-shadow: 0 8px 0 #edc4cf, 0 12px 24px #d8a9b522;
+    margin-bottom: 24px;
 }
 
-.hero:after {
-    content: "♡  ✿  ♡";
+.hero::after {
+    content: "🍓  ✿  ♡  ✦";
     position: absolute;
-    right: 20px;
-    top: 18px;
-    font-size: 27px;
-    color: #d87f9d;
+    right: 22px;
+    top: 16px;
+    font-size: 24px;
     transform: rotate(8deg);
 }
 
 .hero h1 {
-    font-size: clamp(2.2rem, 5vw, 3.5rem);
-    line-height: 1.2;
-    margin: 8px 0;
-    color: #b85d7b;
+    font-family: 'Jua', sans-serif;
+    font-size: clamp(30px, 4vw, 48px);
+    margin: 0;
+    color: #96536e;
+    letter-spacing: 1px;
 }
 
 .hero p {
-    font-size: 1.05rem;
-    color: #966777;
-    margin-bottom: 0;
+    margin: 10px 0 0;
+    font-size: 15px;
+    color: #765d68;
 }
 
-.eyebrow {
-    font-size: .8rem;
-    letter-spacing: 3px;
-    color: #ad6b7e;
-    font-weight: 900;
-}
-
-.ribbon {
+.tape {
     display: inline-block;
-    background: #e982a2;
-    color: white;
-    padding: 7px 15px;
-    border-radius: 30px;
-    box-shadow: 0 3px 0 #d76f90;
-    font-family: 'Jua', sans-serif;
-    margin: 8px 0 14px;
+    padding: 6px 14px;
+    background: #fff9dc;
+    border: 1px dashed #e7bb88;
+    color: #a66c6c;
+    border-radius: 5px;
+    transform: rotate(-2deg);
+    font-size: 12px;
+    font-weight: 800;
+    margin-bottom: 12px;
 }
 
 .section-title {
     font-family: 'Jua', sans-serif;
-    font-size: 1.35rem;
-    color: #bd6483;
-    margin: 8px 0 14px;
+    font-size: 23px;
+    color: #a25c78;
+    margin: 6px 0 14px;
 }
 
-.sticker {
+.diary {
     position: relative;
-    background: rgba(255,255,255,.92);
-    border: 2px solid white;
-    outline: 1px dashed #efb7c8;
-    outline-offset: -8px;
-    border-radius: 25px;
-    padding: 23px;
-    margin: 5px 0 19px;
-    box-shadow: 0 7px 20px #d58ba51a;
+    background-color: #fffdf8;
+    background-image: repeating-linear-gradient(
+        to bottom,
+        transparent 0px,
+        transparent 31px,
+        #e9dce4 32px,
+        transparent 33px
+    );
+    border: 1px solid #efd6df;
+    border-radius: 18px;
+    padding: 22px 20px 22px 36px;
+    box-shadow: 4px 5px 0 #f0d5df;
+    margin-bottom: 20px;
+    overflow: hidden;
 }
 
-.sticker h3 {
+.diary::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 22px;
+    border-left: 2px solid #efa6b9;
+}
+
+.diary h3 {
+    font-family: 'Jua', sans-serif;
     margin-top: 0;
 }
 
-.note {
-    background: #fff0c9;
-    border-left: 5px solid #efc66e;
-    border-radius: 10px 18px 18px 10px;
-    padding: 15px 17px;
-    color: #8c6d46;
+.sticker {
+    display: inline-block;
+    background: #ffe0e9;
+    color: #a65376;
+    padding: 7px 12px;
+    border: 1px solid #f2b4c8;
+    border-radius: 12px 5px 12px 5px;
+    transform: rotate(-2deg);
+    font-size: 12px;
+    font-weight: 800;
+    margin-bottom: 10px;
+}
+
+.paper-card {
+    background: #fffdf8;
+    border: 2px dashed #eac0cf;
+    border-radius: 20px;
+    padding: 20px;
+    box-shadow: 0 6px 0 #f2dce4;
+    margin-bottom: 18px;
+}
+
+.green-card {
+    background: #f5faee;
+    border-color: #c7ddb9;
+    box-shadow: 0 6px 0 #e0ebd5;
+}
+
+.pink-card {
+    background: #fff0f4;
+}
+
+.metric {
+    background: #fffdf9;
+    border: 2px solid #f0d1dc;
+    border-radius: 18px;
+    padding: 16px 12px;
+    text-align: center;
+    box-shadow: 0 4px 0 #f5e2e8;
+    min-height: 95px;
+}
+
+.metric-label {
+    font-size: 12px;
+    color: #987783;
+    font-weight: 800;
+}
+
+.metric-value {
+    font-family: 'Jua', sans-serif;
+    font-size: 25px;
+    color: #a65e7b;
+    margin-top: 6px;
+    overflow-wrap: anywhere;
+}
+
+.safe-banner {
+    background: #eef7e7;
+    border: 2px solid #b9d7a8;
+    border-radius: 18px;
+    padding: 18px;
+    color: #55784a;
+    font-weight: 800;
     margin: 12px 0;
 }
 
-.safe {
-    background: linear-gradient(135deg, #e9f5df, #f9fff2);
-    border: 2px solid #c5dfb4;
-    border-radius: 25px;
-    padding: 24px;
-    color: #47754c;
-    margin: 17px 0;
-    box-shadow: 0 6px 0 #d8e9cd;
-}
-
-.danger {
-    background: linear-gradient(135deg, #ffe3e1, #fff0e8);
-    border: 2px solid #f4aaa8;
-    border-radius: 25px;
-    padding: 24px;
-    color: #a6424e;
-    margin: 17px 0;
-    box-shadow: 0 6px 0 #f6d0ca;
-}
-
-.big-emoji {
-    font-size: 2.8rem;
-    margin-bottom: 5px;
-}
-
-.mini-caption {
-    font-size: .88rem;
-    color: #a17b86;
-}
-
-div.stButton > button {
-    min-height: 3.1rem;
+.danger-banner {
+    background: #fff0f1;
+    border: 2px solid #e99aab;
     border-radius: 18px;
-    border: 2px solid #f1bfd0;
-    background: #fff;
-    color: #b85d7b;
-    font-family: 'Jua', sans-serif;
-    font-size: 1rem;
-    box-shadow: 0 3px 0 #f5d5df;
-    transition: .18s;
+    padding: 18px;
+    color: #b33f5b;
+    font-weight: 800;
+    margin: 12px 0;
 }
 
-div.stButton > button:hover {
-    background: #ffe6ee;
-    border-color: #e982a2;
-    color: #a64d6b;
-    transform: translateY(-1px);
+.small-note {
+    font-size: 12px;
+    color: #997d87;
 }
 
-div.stButton > button[kind="primary"] {
-    background: linear-gradient(135deg, #ed91ad, #dd7093);
-    color: white;
-    border: 2px solid #e982a2;
-    box-shadow: 0 4px 0 #c96586;
+.stButton > button {
+    border-radius: 14px;
+    border: 1px solid #e8b2c4;
+    background: #f5bfd0;
+    color: #78445a;
+    font-weight: 800;
+    min-height: 44px;
+    transition: 0.2s;
 }
 
-div.stButton > button[kind="primary"]:hover {
-    background: #d96789;
-    color: white;
+.stButton > button:hover {
+    background: #eea9c0;
+    border-color: #d889a6;
+    color: #68364c;
+    transform: translateY(-2px);
 }
 
-div[data-testid="stVerticalBlockBorderWrapper"] {
-    background: rgba(255,255,255,.78);
-    border-radius: 24px;
-    border-color: #f5d9e2;
-}
-
-div[data-testid="stMetric"] {
-    background: white;
-    border: 2px solid #f6dce3;
-    border-radius: 21px;
-    padding: 15px;
-    box-shadow: 0 4px 0 #f8e6eb;
-}
-
-div[data-testid="stMetricLabel"] {
-    color: #b7778b;
-    font-family: 'Jua', sans-serif;
-}
-
-hr {
-    border-color: #f3d5df;
-}
-
-input, textarea {
-    border-radius: 14px !important;
+.stTextArea textarea,
+.stTextInput input,
+.stNumberInput input {
+    background: #fffdf9;
+    border-color: #e8c7d3;
+    border-radius: 12px;
 }
 
 div[data-baseweb="select"] > div {
-    border-radius: 14px;
+    background: #fffdf9;
+    border-color: #e8c7d3;
+    border-radius: 12px;
+}
+
+hr {
+    border-color: #efd7e0;
 }
 
 .footer {
     text-align: center;
-    background: linear-gradient(120deg, #ffe5ed, #fff0d3);
-    border: 2px dashed #eab0c2;
-    border-radius: 27px;
-    padding: 27px 15px;
-    margin-top: 22px;
-}
-
-.footer-title {
-    color: #bd6483;
-    font-size: 1.35rem;
-    font-family: 'Jua', sans-serif;
-}
-
-div[data-testid="stAlert"] {
-    border-radius: 17px;
+    padding: 22px 8px;
+    color: #b18193;
+    font-size: 12px;
 }
 </style>
 """, unsafe_allow_html=True)
 
-# ──────────────── 🧸 상태 저장 ────────────────
+
+# -----------------------------
+# 거리 계산 함수
+# -----------------------------
+def distance_m(lat1, lon1, lat2, lon2):
+    """두 좌표 사이의 거리를 미터 단위로 계산"""
+    radius = 6371000
+
+    lat1, lon1, lat2, lon2 = map(
+        math.radians, [lat1, lon1, lat2, lon2]
+    )
+
+    dlat = lat2 - lat1
+    dlon = lon2 - lon1
+
+    a = (
+        math.sin(dlat / 2) ** 2
+        + math.cos(lat1)
+        * math.cos(lat2)
+        * math.sin(dlon / 2) ** 2
+    )
+
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+    return radius * c
+
+
+# -----------------------------
+# 세션 상태 초기화
+# -----------------------------
+if "help_message" not in st.session_state:
+    st.session_state.help_message = ""
+
 if "help_requested" not in st.session_state:
     st.session_state.help_requested = False
 
 if "help_time" not in st.session_state:
     st.session_state.help_time = ""
 
-if "help_message" not in st.session_state:
-    st.session_state.help_message = "도움이 필요해요. 저를 확인해 주세요."
+if "help_reset" not in st.session_state:
+    st.session_state.help_reset = 0
 
-# ──────────────── 🍓 상단 배너 ────────────────
-st.markdown("""
+
+# -----------------------------
+# 사이드바
+# -----------------------------
+with st.sidebar:
+    st.markdown("## 🍓 안심 탐험대")
+    st.caption("오늘도 안전하게, 소중하게!")
+
+    st.markdown("---")
+
+    mode = st.radio(
+        "📔 다이어리 주인",
+        ["🧸 어린이 모드", "🌷 보호자 모드"],
+        index=0,
+    )
+
+    st.markdown("---")
+    st.markdown("### 🎀 안전 약속")
+    st.markdown("""
+    - 낯선 사람을 따라가지 않기
+    - 위험하면 믿을 수 있는 어른에게 알리기
+    - 길을 잃으면 안전한 장소에서 도움 요청하기
+    """)
+
+    st.markdown("---")
+    st.markdown(
+        '<div class="small-note">오늘의 안전도 중요하지만, '
+        '무엇보다 네가 소중해! 🍰</div>',
+        unsafe_allow_html=True,
+    )
+
+
+# -----------------------------
+# 상단 다이어리 표지
+# -----------------------------
+today = datetime.now().strftime("%Y년 %m월 %d일")
+
+st.markdown(f"""
 <div class="hero">
-    <div class="eyebrow">✦ LITTLE EXPLORERS CLUB ✦</div>
-    <div style="font-size:2rem; margin-top:10px;">🎀 🐰 🍓</div>
-    <h1>안심 탐험대</h1>
-    <p>오늘의 작은 모험도 안전하게, 행복하게 ♡</p>
-    <div class="ribbon">🌷 SAFETY FIRST · LOVE ALWAYS 🌷</div>
-    <div style="color:#a87580;">✧･ﾟ: *✧･ﾟ:* 나의 안전 다이어리 *:･ﾟ✧*:･ﾟ✧</div>
+    <div class="tape">MY LITTLE SAFETY DIARY ✂️</div>
+    <h1>🍓 안심 탐험대</h1>
+    <p>오늘의 작은 모험도 안전하게 기록하기</p>
+    <p>📅 {today} &nbsp; · &nbsp; 오늘도 무사히 돌아오기 프로젝트</p>
 </div>
 """, unsafe_allow_html=True)
 
-# ──────────────── 사이드 메뉴 ────────────────
-with st.sidebar:
-    st.markdown("# 🎀 탐험 수첩")
-    st.write("오늘도 즐거운 하루 보내기!")
-    st.markdown("### 🌷 누구의 수첩인가요?")
-    mode = st.radio(
-        "사용 모드",
-        ["🧸 보호자 모드", "🐰 아이 모드"],
-        label_visibility="collapsed",
+
+# -----------------------------
+# 좌표 설정
+# -----------------------------
+with st.expander("🗺️ 놀이터와 어린이 위치 설정하기", expanded=True):
+    st.caption(
+        "아래 좌표는 직접 입력하는 테스트용 정보야. "
+        "실제 GPS 위치가 자동으로 들어오는 것은 아니야."
     )
 
-    st.markdown("---")
-    st.markdown("### 🍀 오늘의 안전 약속")
-    st.write("🍓 안전 구역 확인하기")
-    st.write("💌 도움이 필요하면 요청하기")
-    st.write("🎤 마이크는 직접 허용하기")
-    st.write("🌷 모르는 사람을 따라가지 않기")
+    location_col1, location_col2 = st.columns(2)
 
-    st.markdown("---")
-    st.markdown("""
-    <div class="sticker" style="padding:18px;">
-        <div style="font-size:2rem;">🐰</div>
-        <b>오늘의 응원 메시지</b><br>
-        <span class="mini-caption">
-        너의 안전이 제일 소중해! ♡
-        </span>
-    </div>
-    """, unsafe_allow_html=True)
-    st.caption("made with ♡ · 안심 탐험대")
-
-# ──────────────── 거리 계산 ────────────────
-def distance_m(lat1, lon1, lat2, lon2):
-    r = 6371000
-    p1 = math.radians(lat1)
-    p2 = math.radians(lat2)
-    dp = math.radians(lat2 - lat1)
-    dl = math.radians(lon2 - lon1)
-
-    a = (
-        math.sin(dp / 2) ** 2
-        + math.cos(p1) * math.cos(p2)
-        * math.sin(dl / 2) ** 2
-    )
-    a = min(1.0, max(0.0, a))
-
-    return 2 * r * math.atan2(
-        math.sqrt(a), math.sqrt(1 - a)
-    )
-
-# ──────────────── 메인 레이아웃 ────────────────
-left, right = st.columns([1.12, 0.88], gap="large")
-
-# ──────────────── 🗺️ 안전 지도 ────────────────
-with left:
-    st.markdown("""
-    <div class="sticker">
-        <div style="font-size:2rem;">🗺️ 🌼</div>
-        <h3>나의 안전 지도</h3>
-        <div class="mini-caption">
-        우리 탐험대의 안전 구역을 확인해 봐요!
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    with st.container(border=True):
+    with location_col1:
         st.markdown("### 🌳 놀이터 위치")
-        a, b = st.columns(2)
-
-        with a:
-            park_lat = st.number_input(
-                "놀이터 위도",
-                value=37.5665,
-                format="%.6f",
-            )
-
-        with b:
-            park_lon = st.number_input(
-                "놀이터 경도",
-                value=126.9780,
-                format="%.6f",
-            )
-
-        radius = st.slider(
-            "💚 안전 구역 반경",
-            min_value=20,
-            max_value=1000,
-            value=100,
-            step=10,
-            format="%d m",
+        playground_lat = st.number_input(
+            "놀이터 위도",
+            value=37.5665,
+            format="%.6f",
+            key="play_lat",
+        )
+        playground_lon = st.number_input(
+            "놀이터 경도",
+            value=126.9780,
+            format="%.6f",
+            key="play_lon",
         )
 
-        st.markdown("---")
-        st.markdown("### 🐰 아이의 위치")
-
-        c, d = st.columns(2)
-
-        with c:
-            child_lat = st.number_input(
-                "아이 위도",
-                value=37.5668,
-                format="%.6f",
-            )
-
-        with d:
-            child_lon = st.number_input(
-                "아이 경도",
-                value=126.9782,
-                format="%.6f",
-            )
-
-        check = st.button(
-            "🍓 안전 확인하기",
-            type="primary",
-            use_container_width=True,
+    with location_col2:
+        st.markdown("### 🧸 어린이 위치")
+        child_lat = st.number_input(
+            "어린이 위도",
+            value=37.5665,
+            format="%.6f",
+            key="child_lat",
+        )
+        child_lon = st.number_input(
+            "어린이 경도",
+            value=126.9780,
+            format="%.6f",
+            key="child_lon",
         )
 
-    valid = (
-        -90 <= park_lat <= 90
-        and -180 <= park_lon <= 180
-        and -90 <= child_lat <= 90
-        and -180 <= child_lon <= 180
+    safe_radius = st.slider(
+        "안전 범위 설정",
+        min_value=50,
+        max_value=1000,
+        value=200,
+        step=50,
+        format="%d m",
     )
 
-    if valid:
-        dist = distance_m(
-            park_lat, park_lon, child_lat, child_lon
-        )
+    st.caption("💡 테스트할 때는 어린이 좌표를 바꾸면서 거리를 확인해 봐!")
 
-        m1, m2 = st.columns(2)
-        with m1:
-            st.metric("📍 놀이터까지 거리", f"{dist:.0f} m")
-        with m2:
-            st.metric("💚 안전 구역 반경", f"{radius} m")
 
-        if dist <= radius:
-            st.markdown(f"""
-            <div class="safe">
-                <div class="big-emoji">🌼 🐰 🌼</div>
-                <h3>안전 구역 안이에요!</h3>
-                놀이터 중심에서 약 <b>{dist:.0f}m</b> 떨어져 있어요.<br>
-                오늘도 즐겁게 탐험해 봐요 ♡
-            </div>
-            """, unsafe_allow_html=True)
-        else:
-            st.markdown(f"""
-            <div class="danger">
-                <div class="big-emoji">🚨 🍓 🚨</div>
-                <h3>안전 구역 밖이에요!</h3>
-                놀이터 중심에서 약 <b>{dist:.0f}m</b> 떨어져 있어요.<br>
-                보호자와 함께 위치를 확인해 주세요.
-            </div>
-            """, unsafe_allow_html=True)
+# -----------------------------
+# 현재 안전 상태 계산
+# -----------------------------
+distance = distance_m(
+    playground_lat,
+    playground_lon,
+    child_lat,
+    child_lon,
+)
 
-        st.markdown("### 📍 지도 미리보기")
-        st.map(pd.DataFrame({
-            "latitude": [park_lat, child_lat],
-            "longitude": [park_lon, child_lon],
-        }))
+is_safe = distance <= safe_radius
 
-        if check:
-            st.toast("안전 확인 완료! 🍓")
-    else:
-        st.error("위도와 경도 값을 확인해 주세요.")
 
-# ──────────────── 💌 도움 요청 · 마이크 ────────────────
-with right:
-    st.markdown("""
-    <div class="sticker">
-        <div style="font-size:2rem;">💌 🧸</div>
-        <h3>도움 요청 우체통</h3>
-        <div class="mini-caption">
-        혼자 해결하기 어려울 땐 믿을 수 있는 어른에게 알려요.
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+# -----------------------------
+# 메인 화면 배치
+# 왼쪽: 안전 상태 / 지도
+# 오른쪽: 도움 요청 / 음성 기록
+# -----------------------------
+left_col, right_col = st.columns([1.12, 0.88], gap="large")
 
-    if mode == "🐰 아이 모드":
+
+# =============================
+# 왼쪽 다이어리 페이지
+# =============================
+with left_col:
+    st.markdown(
+        '<div class="section-title">📍 오늘의 안전 기록</div>',
+        unsafe_allow_html=True,
+    )
+
+    st.markdown('<div class="sticker">TODAY CHECK ✔</div>',
+                unsafe_allow_html=True)
+
+    if is_safe:
         st.markdown("""
-        <div class="danger">
-            <div class="big-emoji">🧸 💗</div>
-            <h3>도움이 필요하나요?</h3>
-            아래 버튼으로 도움 요청을 등록할 수 있어요.
+        <div class="safe-banner">
+            🌷 안전 범위 안에 있어요!<br>
+            <span style="font-size:13px;font-weight:normal">
+            설정한 놀이터 범위 안에 있는 것으로 계산됐어요.
+            </span>
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        st.markdown("""
+        <div class="danger-banner">
+            🎀 안전 범위를 벗어났어요!<br>
+            <span style="font-size:13px;font-weight:normal">
+            입력한 좌표를 다시 확인하고 어린이의 안전을 확인해 주세요.
+            </span>
         </div>
         """, unsafe_allow_html=True)
 
-        st.session_state.help_message = st.text_area(
-            "💌 전달할 메시지",
+    metric1, metric2 = st.columns(2)
+
+    with metric1:
+        st.markdown(f"""
+        <div class="metric">
+            <div class="metric-label">📏 놀이터와 거리</div>
+            <div class="metric-value">{distance:.1f} m</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with metric2:
+        status_text = "안전 범위" if is_safe else "범위 밖"
+        st.markdown(f"""
+        <div class="metric">
+            <div class="metric-label">🌱 현재 판정</div>
+            <div class="metric-value">{status_text}</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    st.markdown("")
+
+    st.markdown("""
+    <div class="diary">
+        <div class="sticker">MY MAP 🗺️</div>
+        <h3>오늘의 모험 지도</h3>
+        <p>📌 분홍색 핀은 놀이터, 초록색 핀은 어린이 위치예요.</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    map_data = pd.DataFrame({
+        "lat": [playground_lat, child_lat],
+        "lon": [playground_lon, child_lon],
+    })
+
+    st.map(map_data, latitude="lat", longitude="lon", size=150)
+
+    st.markdown(
+        '<div class="small-note">※ 지도는 입력한 좌표를 표시해요. '
+        '실제 위치 추적 기능은 아니에요.</div>',
+        unsafe_allow_html=True,
+    )
+
+
+# =============================
+# 오른쪽 다이어리 페이지
+# =============================
+with right_col:
+    st.markdown(
+        '<div class="section-title">💌 비밀 쪽지함</div>',
+        unsafe_allow_html=True,
+    )
+
+    if mode == "🧸 어린이 모드":
+        st.markdown("""
+        <div class="diary">
+            <div class="sticker">DEAR GUARDIAN 💌</div>
+            <h3>도움이 필요해요!</h3>
+            <p>걱정되는 일이 있다면 믿을 수 있는 어른에게 알려 주세요.</p>
+        </div>
+        """, unsafe_allow_html=True)
+
+        message = st.text_area(
+            "보호자에게 남길 쪽지",
             value=st.session_state.help_message,
-            max_chars=250,
-            placeholder="예: 보호자를 찾고 있어요.",
+            placeholder="예: 길을 잘 모르겠어요. 도와주세요!",
+            height=125,
+            key=f"child_message_{st.session_state.help_reset}",
         )
 
-        if st.button(
-            "🆘 도움 요청하기",
-            type="primary",
-            use_container_width=True,
-        ):
+        if st.button("💌 도움 요청 쪽지 작성하기", use_container_width=True):
+            st.session_state.help_message = message.strip()
             st.session_state.help_requested = True
             st.session_state.help_time = datetime.now().strftime(
-                "%Y-%m-%d %H:%M:%S"
+                "%Y-%m-%d %H:%M"
             )
-            st.rerun()
+
+            if not st.session_state.help_message:
+                st.session_state.help_message = "도움이 필요해요!"
+            st.success("쪽지를 이 앱에 기록했어요!")
 
         if st.session_state.help_requested:
-            st.markdown(f"""
-            <div class="danger">
-                <h3>💌 요청이 등록됐어요!</h3>
-                <p>🕒 {st.session_state.help_time}</p>
-                <p>📝 {st.session_state.help_message}</p>
-            </div>
-            """, unsafe_allow_html=True)
-
-            st.warning(
-                "이 요청은 현재 앱 화면에 표시돼요. "
-                "다른 휴대전화로 자동 전송되지는 않아요."
+            st.markdown(
+                f"""
+                <div class="paper-card pink-card">
+                    <div class="sticker">SAVED NOTE ✨</div>
+                    <h3>📝 작성한 쪽지</h3>
+                    <p>{st.session_state.help_message}</p>
+                    <p class="small-note">
+                    기록 시간: {st.session_state.help_time}
+                    </p>
+                </div>
+                """,
+                unsafe_allow_html=True,
             )
 
-            if st.button("확인 완료 ♡", use_container_width=True):
-                st.session_state.help_requested = False
-                st.session_state.help_time = ""
-                st.rerun()
-
         st.markdown("---")
+
         st.markdown("""
-        <div class="sticker">
-            <div style="font-size:2rem;">🎤 🎧</div>
-            <h3>소리 녹음 다이어리</h3>
-            <div class="mini-caption">
-            직접 녹음을 시작하고, 녹음한 소리를 이 화면에서 확인해요.
-            </div>
+        <div class="paper-card green-card">
+            <div class="sticker">VOICE MEMO 🎙️</div>
+            <h3>목소리 메모</h3>
+            <p>필요할 때 직접 녹음해 이 화면에서 다시 들을 수 있어요.</p>
         </div>
         """, unsafe_allow_html=True)
 
-        st.info(
-            "마이크는 직접 시작해야 해요. "
-            "녹음하기 전에 주변 사람에게 알리고 동의를 받아 주세요."
+        audio_value = st.audio_input(
+            "음성 메모 녹음하기",
+            key="child_audio",
         )
 
-        try:
-            audio = st.audio_input(
-                "🎙️ 녹음 시작하기",
-                sample_rate=16000,
-                key="child_audio",
-            )
-
-            if audio is not None:
-                st.success("🌷 녹음이 완료됐어요!")
-                st.audio(audio, format="audio/wav")
-                st.caption(
-                    "이 녹음은 이 화면에서 재생할 수 있어요. "
-                    "보호자에게 자동 전송되지는 않아요."
-                )
-        except Exception:
-            st.warning(
-                "마이크 입력을 지원하지 않는 Streamlit 버전일 수 있어요. "
-                "requirements.txt에서 Streamlit 버전을 확인해 주세요."
+        if audio_value is not None:
+            st.audio(audio_value)
+            st.caption(
+                "녹음은 이 화면에서 재생할 수 있어요. "
+                "보호자에게 자동으로 전송되지는 않아요."
             )
 
     else:
         st.markdown("""
-        <div class="safe">
-            <div class="big-emoji">💗 🏡 💗</div>
-            <h3>보호자 안전 수첩</h3>
-            아이의 안전 구역과 등록된 도움 요청 상태를 확인해요.
+        <div class="diary">
+            <div class="sticker">GUARDIAN'S PAGE 🌷</div>
+            <h3>보호자 확인 페이지</h3>
+            <p>어린이의 안전 상태와 도움 요청 기록을 확인해 보세요.</p>
         </div>
         """, unsafe_allow_html=True)
+
+        if is_safe:
+            st.success("🌱 입력된 좌표 기준으로 안전 범위 안에 있어요.")
+        else:
+            st.error("📍 입력된 좌표 기준으로 안전 범위를 벗어났어요.")
+
+        st.markdown("### 💌 도움 요청 기록")
 
         if st.session_state.help_requested:
-            st.markdown(f"""
-            <div class="danger">
-                <h3>🚨 도움 요청 상태</h3>
-                <p>🕒 {st.session_state.help_time}</p>
-                <p>📝 {st.session_state.help_message}</p>
-            </div>
-            """, unsafe_allow_html=True)
+            st.markdown(
+                f"""
+                <div class="paper-card pink-card">
+                    <div class="sticker">NEW NOTE 💗</div>
+                    <h3>어린이가 남긴 쪽지</h3>
+                    <p>{st.session_state.help_message}</p>
+                    <p class="small-note">
+                    기록 시간: {st.session_state.help_time}
+                    </p>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+            if st.button("☑️ 쪽지 확인 완료", use_container_width=True):
+                st.session_state.help_requested = False
+                st.session_state.help_message = ""
+                st.session_state.help_time = ""
+                st.rerun()
         else:
-            st.info("현재 등록된 도움 요청이 없어요. 🌷")
+            st.info("아직 이 앱에 기록된 도움 요청이 없어요.")
+
+        st.markdown("---")
 
         st.markdown("""
-        <div class="note">
-            <b>🎧 주변 소리 기능 안내</b><br>
-            아이 기기에서 직접 녹음한 소리는 현재 그 화면에서만 확인할 수 있어요.
-            보호자 기기에서 듣는 기능은 별도의 기기 연결이 필요해요.
+        <div class="paper-card green-card">
+            <div class="sticker">SAFETY REMINDER 🌼</div>
+            <h3>안전 확인 메모</h3>
+            <p>실제 상황에서는 어린이에게 직접 연락하거나 가까운 믿을 수 있는 어른에게 도움을 요청하세요.</p>
         </div>
         """, unsafe_allow_html=True)
 
-# ──────────────── 🌷 하단 장식 ────────────────
+
+# -----------------------------
+# 하단 장식
+# -----------------------------
 st.markdown("---")
 st.markdown("""
 <div class="footer">
-    <div style="font-size:2.5rem;">🍓 🐰 🌷 🎀 🧸</div>
-    <div class="footer-title">오늘도 무사히, 행복하게!</div>
-    <p style="color:#9b7180;">
-    안심 탐험대와 함께하는 작은 모험 ♡
-    </p>
-    <div style="color:#bb8a98;font-size:.8rem;">
-    ✧ 학습용 시제품 · 안전한 탐험을 위한 작은 프로젝트 ✧
-    </div>
+    🍓 안심 탐험대 · MY LITTLE SAFETY DIARY 🍓<br>
+    작은 모험도 안전하게, 하루의 끝은 행복하게 ♡
 </div>
 """, unsafe_allow_html=True)
