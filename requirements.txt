@@ -1,4 +1,8 @@
 streamlit>=1.28.0
 pandas>=2.0.0
 streamlit
-streamlit>=1.40.0,<2.0.0
+streamlit
+folium
+streamlit-folium
+google-generativeai
+pandas
