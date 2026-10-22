@@ -1,609 +1,204 @@
-import streamlit as st
+import streamlit as st 
 st.title('보호자 알림 페이지')
 st.write('아이가 지정한 위치에서 벗어나면 보호자에게 알림이 가는 기능')
 
-import csv
-import io
+import streamlit as st
+import folium
+from streamlit_folium import st_folium
 import math
 from datetime import datetime
+import pandas as pd
+import google.generativeai as genai
 
-import streamlit as st
-
-
-# --------------------------------------------------
-# 앱 기본 설정
-# --------------------------------------------------
+# -----------------------------------------------------------------------------
+# 1. 페이지 설정 및 초기화
+# -----------------------------------------------------------------------------
 st.set_page_config(
-    page_title="안심존 | 아이 위치 안전 관리",
-    page_icon="🛡️",
-    layout="wide",
-    initial_sidebar_state="expanded",
+    page_title="아동 안심 지오펜스 알림 시스템",
+    page_icon="🚨",
+    layout="wide"
 )
 
-st.markdown(
-    """
-    <style>
-    .stApp {
-        background-color: #f5f7fb;
-    }
-    .main .block-container {
-        max-width: 1150px;
-        padding-top: 2rem;
-        padding-bottom: 3rem;
-    }
-    .hero {
-        background: linear-gradient(120deg, #173b67, #2875a8);
-        padding: 28px;
-        border-radius: 18px;
-        color: white;
-        margin-bottom: 20px;
-    }
-    .hero h1 {
-        color: white;
-        margin-bottom: 8px;
-    }
-    .hero p {
-        color: #e7f2ff;
-        margin-bottom: 0;
-    }
-    .small-note {
-        color: #667085;
-        font-size: 0.88rem;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
+# 세션 상태 초기화 (위험 이력 기록용)
+if "alert_history" not in st.session_state:
+    st.session_state.alert_history = []
 
+# -----------------------------------------------------------------------------
+# 2. 유틸리티 함수 (하버사인 거리 계산 공식)
+# -----------------------------------------------------------------------------
+def haversine_distance(lat1, lon1, lat2, lon2):
+    """두 위도/경도 좌표 사이의 거리를 미터(m) 단위로 계산합니다."""
+    R = 6371000  # 지구 반지름 (미터)
+    phi1 = math.radians(lat1)
+    phi2 = math.radians(lat2)
+    delta_phi = math.radians(lat2 - lat1)
+    delta_lambda = math.radians(lon2 - lon1)
 
-# --------------------------------------------------
-# 위치 및 거리 계산
-# --------------------------------------------------
-def valid_coordinate(lat, lon):
-    """위도와 경도가 유효한 범위인지 확인합니다."""
-    return (
-        math.isfinite(lat)
-        and math.isfinite(lon)
-        and -90 <= lat <= 90
-        and -180 <= lon <= 180
-    )
+    a = math.sin(delta_phi / 2.0) ** 2 + \
+        math.cos(phi1) * math.cos(phi2) * math.sin(delta_lambda / 2.0) ** 2
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
+    return R * c
 
-def distance_meters(lat1, lon1, lat2, lon2):
-    """두 좌표 사이의 거리를 하버사인 공식으로 계산합니다."""
-    earth_radius = 6_371_000
+# -----------------------------------------------------------------------------
+# 3. Gemini AI 대처 가이드 생성 함수
+# -----------------------------------------------------------------------------
+def get_ai_emergency_guide(child_name, zone_name, distance, safe_radius):
+    """Gemini AI를 활용해 지오펜스 이탈 시 행동 요령을 작성합니다."""
+    api_key = st.secrets.get("GEMINI_API_KEY", None)
+    if not api_key:
+        return "⚠️ Gemini API 키가 설정되지 않았습니다. Secrets 설정을 확인해주세요."
 
-    lat1, lon1, lat2, lon2 = map(
-        math.radians, [lat1, lon1, lat2, lon2]
-    )
-
-    delta_lat = lat2 - lat1
-    delta_lon = lon2 - lon1
-
-    a = (
-        math.sin(delta_lat / 2) ** 2
-        + math.cos(lat1)
-        * math.cos(lat2)
-        * math.sin(delta_lon / 2) ** 2
-    )
-    a = max(0.0, min(1.0, a))
-
-    return 2 * earth_radius * math.asin(math.sqrt(a))
-
-
-def format_distance(meters):
-    if meters >= 1000:
-        return f"{meters / 1000:.2f} km"
-    return f"{meters:.0f} m"
-
-
-# --------------------------------------------------
-# 세션 상태 초기화
-# --------------------------------------------------
-if "events" not in st.session_state:
-    st.session_state.events = []
-
-if "last_status" not in st.session_state:
-    st.session_state.last_status = None
-
-if "last_check" not in st.session_state:
-    st.session_state.last_check = None
-
-if "last_distance" not in st.session_state:
-    st.session_state.last_distance = None
-
-if "last_child_location" not in st.session_state:
-    st.session_state.last_child_location = None
-
-if "last_zone_name" not in st.session_state:
-    st.session_state.last_zone_name = None
-
-
-# --------------------------------------------------
-# 사이드바: 안전 구역 설정
-# --------------------------------------------------
-st.sidebar.title("⚙️ 안전 구역 설정")
-st.sidebar.caption("보호자가 관리하는 안심존의 기준입니다.")
-
-zone_name = st.sidebar.text_input(
-    "안전 구역 이름",
-    value="우리 집",
-    max_chars=50,
-)
-
-center_lat = st.sidebar.number_input(
-    "안전 구역 중심 위도",
-    min_value=-90.0,
-    max_value=90.0,
-    value=37.5665,
-    step=0.0001,
-    format="%.6f",
-)
-
-center_lon = st.sidebar.number_input(
-    "안전 구역 중심 경도",
-    min_value=-180.0,
-    max_value=180.0,
-    value=126.9780,
-    step=0.0001,
-    format="%.6f",
-)
-
-radius = st.sidebar.slider(
-    "안전 구역 반경",
-    min_value=50,
-    max_value=3000,
-    value=300,
-    step=50,
-    format="%d m",
-)
-
-st.sidebar.divider()
-st.sidebar.markdown("**안심존 판정 기준**")
-st.sidebar.write(f"📍 기준 위치: {zone_name or '이름 미설정'}")
-st.sidebar.write(f"⭕ 허용 반경: {radius:,}m")
-st.sidebar.caption(
-    "중심 좌표와 아이의 좌표 사이의 직선거리를 기준으로 판정합니다."
-)
-
-
-# --------------------------------------------------
-# 상단 화면
-# --------------------------------------------------
-st.markdown(
-    """
-    <div class="hero">
-        <h1>🛡️ 안심존</h1>
-        <p>아이의 위치를 확인하고, 안전 구역 이탈 여부를 관리하세요.</p>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
-
-st.info(
-    "현재 버전은 좌표 입력 기반 시뮬레이터입니다. "
-    "GPS를 백그라운드에서 자동 추적하거나 실제 문자·푸시 알림을 "
-    "전송하지 않습니다."
-)
-
-
-# --------------------------------------------------
-# 아이 위치 입력
-# --------------------------------------------------
-st.subheader("📍 아이 위치 확인")
-st.write(
-    "아이의 현재 좌표를 입력한 뒤 확인 버튼을 누르세요. "
-    "아래 샘플 좌표로 이탈 상황을 테스트할 수도 있습니다."
-)
-
-with st.form("location_form"):
-    col1, col2 = st.columns(2)
-
-    with col1:
-        child_lat = st.number_input(
-            "아이의 현재 위도",
-            min_value=-90.0,
-            max_value=90.0,
-            value=float(center_lat),
-            step=0.0001,
-            format="%.6f",
-        )
-
-    with col2:
-        child_lon = st.number_input(
-            "아이의 현재 경도",
-            min_value=-180.0,
-            max_value=180.0,
-            value=float(center_lon),
-            step=0.0001,
-            format="%.6f",
-        )
-
-    submitted = st.form_submit_button(
-        "🔎 위치 확인하기",
-        type="primary",
-        use_container_width=True,
-    )
-
-
-# --------------------------------------------------
-# 위치 판정 및 이벤트 기록
-# --------------------------------------------------
-if submitted:
     try:
-        if not zone_name.strip():
-            st.error("안전 구역 이름을 입력해 주세요.")
-        elif not valid_coordinate(center_lat, center_lon):
-            st.error("안전 구역 좌표가 올바르지 않습니다.")
-        elif not valid_coordinate(child_lat, child_lon):
-            st.error("아이의 좌표가 올바르지 않습니다.")
-        else:
-            distance = distance_meters(
-                center_lat,
-                center_lon,
-                child_lat,
-                child_lon,
-            )
+        genai.configure(api_key=api_key)
+        model = genai.GenerativeModel('gemini-2.5-flash-lite')
+        
+        prompt = f"""
+        당신은 아동 안전 전문 컨설턴트입니다.
+        아래 상황 정보를 바탕으로 보호자가 즉각 취해야 할 행동 가이드라인 3가지와 당황하지 않도록 격려하는 메시지를 간결하게 작성해주세요.
 
-            is_outside = distance > radius
-            new_status = "이탈" if is_outside else "안전"
-            previous_status = st.session_state.last_status
+        - 아이 이름: {child_name}
+        - 지정 안전구역: {zone_name} (설정 반지름: {safe_radius}m)
+        - 이탈 거리: 지정 구역으로부터 약 {int(distance - safe_radius)}m 추가 이탈 (총 거리 {int(distance)}m)
 
-            now = datetime.now().astimezone()
-            timestamp = now.strftime("%Y-%m-%d %H:%M:%S %z")
+        응답 형식:
+        1. 🚨 즉시 확인 행동 요령 3가지 (Bullet points)
+        2. 📞 권장 확인 연락처 체크리스트
+        """
+        response = model.generate_content(prompt)
+        return response.text
+    except Exception as e:
+        return f"⚠️ AI 가이드를 불러오는 중 오류가 발생했습니다: {str(e)}"
 
-            st.session_state.last_check = timestamp
-            st.session_state.last_distance = distance
-            st.session_state.last_child_location = (
-                child_lat,
-                child_lon,
-            )
-            st.session_state.last_zone_name = zone_name.strip()
+# -----------------------------------------------------------------------------
+# 4. 사이드바 - 설정 메뉴
+# -----------------------------------------------------------------------------
+st.sidebar.title("🛡️ 안전구역 & 아이 정보 설정")
 
-            # 안전 상태가 바뀔 때만 이벤트를 기록합니다.
-            if previous_status != new_status:
-                if is_outside:
-                    event_type = "🚨 안전 구역 이탈"
-                    message = (
-                        f"{zone_name.strip()} 안전 구역을 벗어났습니다."
-                    )
-                else:
-                    event_type = (
-                        "✅ 안전 구역 복귀"
-                        if previous_status == "이탈"
-                        else "🟢 안전 상태 확인"
-                    )
-                    message = (
-                        f"{zone_name.strip()} 안전 구역 안에 있습니다."
-                    )
+child_name = st.sidebar.text_input("아이 이름", value="김민준")
+zone_name = st.sidebar.text_input("안전구역 이름", value="OO초등학교 & 학원가")
 
-                st.session_state.events.insert(
-                    0,
-                    {
-                        "확인 시각": timestamp,
-                        "이벤트": event_type,
-                        "안전 구역": zone_name.strip(),
-                        "거리(m)": round(distance, 1),
-                        "반경(m)": radius,
-                        "위도": child_lat,
-                        "경도": child_lon,
-                        "내용": message,
-                    },
-                )
+st.sidebar.subheader("📍 안전구역 중심 좌표")
+center_lat = st.sidebar.number_input("중심 위도 (Latitude)", value=37.5665, format="%.6f")
+center_lon = st.sidebar.number_input("중심 경도 (Longitude)", value=126.9780, format="%.6f")
+safe_radius = st.sidebar.slider("안전 반지름 (미터)", min_value=50, max_value=1000, value=200, step=50)
 
-            st.session_state.last_status = new_status
+st.sidebar.markdown("---")
+st.sidebar.subheader("📱 아이 GPS 위치 시뮬레이터")
+st.sidebar.caption("아이의 위치 데이터를 실시간 변경하여 이탈 상황을 테스트하세요.")
+child_lat = st.sidebar.number_input("아이 현재 위도", value=37.5690, format="%.6f")
+child_lon = st.sidebar.number_input("아이 현재 경도", value=126.9795, format="%.6f")
 
-    except (ValueError, OverflowError) as exc:
-        st.error(f"위치 계산 중 문제가 발생했습니다: {exc}")
-    except Exception:
-        st.error(
-            "위치를 확인하지 못했습니다. 입력값을 확인하고 다시 시도해 주세요."
-        )
+# -----------------------------------------------------------------------------
+# 5. 메인 화면 구성
+# -----------------------------------------------------------------------------
+st.title("🚨 아이 안심 지오펜스 이탈 알림 시스템")
+st.write("아이의 실시간 위치를 모니터링하고, 지정된 안전 구역을 벗어날 경우 보호자에게 즉시 경고합니다.")
 
+# 연산: 거리 계산
+distance = haversine_distance(center_lat, center_lon, child_lat, child_lon)
+is_out_of_bounds = distance > safe_radius
 
-# --------------------------------------------------
-# 현재 상태 대시보드
-# --------------------------------------------------
-st.divider()
-st.subheader("📊 현재 안전 상태")
-
-status = st.session_state.last_status
-distance = st.session_state.last_distance
-
+# 대시보드 메트릭 표시
 col1, col2, col3 = st.columns(3)
-
 with col1:
-    if status is None:
-        st.metric("현재 상태", "확인 필요")
-    elif status == "이탈":
-        st.metric("현재 상태", "🚨 이탈")
-    else:
-        st.metric("현재 상태", "🟢 안전")
-
+    st.metric(label="지정 안전 반지름", value=f"{safe_radius} m")
 with col2:
-    st.metric(
-        "안전 구역까지의 거리",
-        format_distance(distance) if distance is not None else "—",
-    )
-
+    st.metric(label="현재 아이와의 거리", value=f"{int(distance)} m")
 with col3:
-    if distance is None:
-        remaining = "—"
-    elif distance <= radius:
-        remaining = format_distance(radius - distance)
+    if is_out_of_bounds:
+        st.metric(label="현재 상태", value="🚨 이탈 발생", delta=f"+{int(distance - safe_radius)}m 초과", delta_color="inverse")
     else:
-        remaining = format_distance(distance - radius)
+        st.metric(label="현재 상태", value="✅ 안전구역 내", delta="안전함", delta_color="normal")
 
-    st.metric(
-        "반경 여유 / 초과",
-        remaining,
-        help="안전 구역 안에서는 남은 거리, 밖에서는 초과 거리를 표시합니다.",
-    )
+st.markdown("---")
 
-if status == "이탈" and distance is not None:
-    st.error(
-        f"🚨 안전 구역 이탈 감지: "
-        f"설정 반경보다 {format_distance(distance - radius)} "
-        f"더 멀리 있습니다."
-    )
-elif status == "안전":
-    st.success("현재 입력된 위치는 안전 구역 안에 있습니다.")
-else:
-    st.info("아이의 좌표를 확인하면 안전 상태가 여기에 표시됩니다.")
+# -----------------------------------------------------------------------------
+# 6. 알림 처리 및 UI 반응
+# -----------------------------------------------------------------------------
+if is_out_of_bounds:
+    # 이탈 발생 경고 UI
+    st.error(f"⚠️ [비상] **{child_name}** 아이가 지정된 안전구역(**{zone_name}**)을 벗어났습니다! (초과 거리: 약 {int(distance - safe_radius)}m)")
+    
+    # 비상 경고음 효과 (웹 오디오 재생)
+    audio_html = """
+        <audio autoplay style="display:none;">
+            <source src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3" type="audio/mpeg">
+        </audio>
+    """
+    st.components.v1.html(audio_html, height=0)
 
-if st.session_state.last_check:
-    st.caption(f"마지막 위치 확인: {st.session_state.last_check}")
-
-if st.session_state.last_child_location:
-    lat, lon = st.session_state.last_child_location
-    st.caption(f"마지막 확인 좌표: {lat:.6f}, {lon:.6f}")
-
-
-# --------------------------------------------------
-# 샘플 좌표 테스트
-# --------------------------------------------------
-st.divider()
-st.subheader("🧪 빠른 테스트")
-
-st.write(
-    "샘플 좌표는 현재 안전 구역 중심을 기준으로 생성합니다. "
-    "아래 버튼을 누르면 해당 좌표가 표시되므로, "
-    "위치 확인 폼에서 좌표를 입력한 뒤 판정할 수 있습니다."
-)
-
-sample_col1, sample_col2 = st.columns(2)
-
-with sample_col1:
-    st.markdown("**🟢 안전 구역 안**")
-    st.code(
-        f"위도: {center_lat:.6f}\n경도: {center_lon:.6f}",
-        language="text",
-    )
-
-with sample_col2:
-    st.markdown("**🔴 안전 구역 밖**")
-    # 위도 약 0.01도 차이는 약 1.1km입니다.
-    # 극지방에서도 유효한 좌표 범위를 유지합니다.
-    sample_lat = max(-89.0, min(89.0, center_lat + 0.02))
-    sample_lon = center_lon
-
-    st.code(
-        f"위도: {sample_lat:.6f}\n경도: {sample_lon:.6f}",
-        language="text",
-    )
-
-st.caption(
-    "샘플 좌표는 참고용입니다. 실제 거리는 안전 구역 중심과 "
-    "샘플 좌표 사이의 거리로 계산됩니다."
-)
-
-
-# --------------------------------------------------
-# 보호자 알림 이력
-# --------------------------------------------------
-st.divider()
-st.subheader("🔔 보호자 알림 센터")
-
-events = st.session_state.events
-
-if events:
-    alerts = [event for event in events if event["이벤트"] == "🚨 안전 구역 이탈"]
-    safe_returns = [
-        event for event in events
-        if event["이벤트"] == "✅ 안전 구역 복귀"
-    ]
-
-    metric1, metric2, metric3 = st.columns(3)
-
-    metric1.metric("기록된 이벤트", len(events))
-    metric2.metric("이탈 이벤트", len(alerts))
-    metric3.metric("복귀 이벤트", len(safe_returns))
-
-    st.dataframe(
-        events,
-        use_container_width=True,
-        hide_index=True,
-    )
-
-    # 표준 라이브러리만으로 CSV 파일 생성
-    csv_buffer = io.StringIO()
-    fieldnames = list(events[0].keys())
-
-    writer = csv.DictWriter(
-        csv_buffer,
-        fieldnames=fieldnames,
-        extrasaction="ignore",
-    )
-    writer.writeheader()
-    writer.writerows(events)
-
-    st.download_button(
-        "⬇️ 알림 이력 CSV 다운로드",
-        data=("\ufeff" + csv_buffer.getvalue()).encode("utf-8"),
-        file_name="ansimzone_alert_history.csv",
-        mime="text/csv",
-        use_container_width=True,
-    )
-
-    if st.button("알림 이력 초기화", type="secondary"):
-        st.session_state.events = []
-        st.session_state.last_status = None
-        st.session_state.last_check = None
-        st.session_state.last_distance = None
-        st.session_state.last_child_location = None
-        st.session_state.last_zone_name = None
-        st.rerun()
+    # 이력에 추가 (중복 방지)
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    log_entry = {
+        "시각": now_str,
+        "이름": child_name,
+        "위치": f"{child_lat:.4f}, {child_lon:.4f}",
+        "거리": f"{int(distance)}m",
+        "상태": "위험 (이탈)"
+    }
+    if not st.session_state.alert_history or st.session_state.alert_history[-1]["시각"] != now_str:
+        st.session_state.alert_history.append(log_entry)
 
 else:
-    st.info(
-        "아직 기록된 이벤트가 없습니다. "
-        "아이의 위치를 확인하면 이력이 생성됩니다."
-    )
+    st.success(f"🟢 **{child_name}** 아이가 안전구역(**{zone_name}**) 내부에서 정상 활동 중입니다.")
 
+# -----------------------------------------------------------------------------
+# 7. 지도 시각화 & AI 가이드 탭
+# -----------------------------------------------------------------------------
+tab1, tab2, tab3 = st.tabs(["🗺️ 실시간 지도 모니터링", "🤖 Gemini 비상 대응 AI 가이드", "📜 이탈 경고 이력 로그"])
 
-# --------------------------------------------------
-# 하단 안내
-# --------------------------------------------------
-st.divider()
-st.markdown("### 🔐 개인정보 및 사용 안내")
-st.markdown(
-    """
-    - 좌표는 위치 판정에 사용됩니다. 아이의 위치를 입력할 때 보호자의
-      동의를 받고 필요한 정보만 사용하세요.
-    - 알림 이력은 현재 브라우저 세션에 연결된 Streamlit 세션 상태에
-      저장됩니다. 앱 재시작이나 세션 종료 후에도 보존되는 영구 저장소는 아닙니다.
-    - 여러 보호자에게 실시간 알림을 전달하려면 별도의 서버 저장소와
-      이메일·문자·푸시 알림 서비스를 연결해야 합니다.
-    - 이 앱의 결과만으로 아이의 안전을 보장할 수는 없습니다.
-    """
-)
-3. requirements.txt
-프로젝트에 requirements.txt 파일을 만들고 다음 한 줄만 입력하세요.
+with tab1:
+    st.subheader("📍 안전 구역 및 아이 위치 시각화")
+    
+    # Folium 지도 생성
+    m = folium.Map(location=[center_lat, center_lon], zoom_start=15)
 
+    # 1. 안전구역 (원 표시)
+    folium.Circle(
+        location=[center_lat, center_lon],
+        radius=safe_radius,
+        color="green" if not is_out_of_bounds else "orange",
+        fill=True,
+        fill_color="green" if not is_out_of_bounds else "orange",
+        fill_opacity=0.2,
+        popup=f"안전구역: {zone_name} (반지름 {safe_radius}m)"
+    ).add_to(m)
 
-text
+    # 2. 안전구역 중심 마커
+    folium.Marker(
+        location=[center_lat, center_lon],
+        popup=f"중심점: {zone_name}",
+        icon=folium.Icon(color="blue", icon="home")
+    ).add_to(m)
 
-streamlit>=1.40.0,<2.0.0
-별도의 지도 라이브러리, 데이터베이스, AI 라이브러리는 필요하지 않습니다.
+    # 3. 아이 위치 마커
+    folium.Marker(
+        location=[child_lat, child_lon],
+        popup=f"{child_name}의 현재 위치",
+        icon=folium.Icon(color="red" if is_out_of_bounds else "green", icon="user")
+    ).add_to(m)
 
-4. Secrets 설정 방법
-설정할 Secrets가 없습니다.
+    # Streamlit에 지도 출력
+    st_folium(m, width="100%", height=450)
 
-이 앱은 Gemini API나 외부 서비스 API를 사용하지 않으므로 GEMINI_API_KEY를 등록할 필요가 없습니다. 따라서 API 키 누락이나 API 호출 오류 없이 실행할 수 있습니다.
+with tab2:
+    st.subheader("🤖 AI 맞춤형 비상 대응 리포트")
+    if is_out_of_bounds:
+        st.warning("아이가 안전 구역을 이탈했습니다. 아래 Gemini AI가 제안하는 가이드를 참고하세요.")
+        if st.button("🚨 AI 긴급 대응 가이드 생성/갱신"):
+            with st.spinner("Gemini AI가 상황 분석 및 가이드를 생성 중입니다..."):
+                ai_guide = get_ai_emergency_guide(child_name, zone_name, distance, safe_radius)
+                st.markdown(ai_guide)
+    else:
+        st.info("현재 아이가 안전 구역 내에 있습니다. 이탈 시 이곳에 AI 대응 가이드가 활성화됩니다.")
 
-5. GitHub에 올리고 배포하기
-1단계. GitHub 저장소 만들기
-GitHub Vs. Bitbucket: Which Code Hosting Platform is Best? - Hatica
-GitHub 저장소 생성
-
-GitHub 에 로그인한 다음 New repository를 클릭합니다.
-
-Repository name: ansimzone
-
-공개 여부: Public 권장
-
-Create repository 클릭
-
-2단계. 파일 2개 업로드
-저장소에 다음 구조로 파일을 올립니다.
-
-ansimzone/
-
-app.py
-
-위에 제공한 전체 Python 코드
-
-requirements.txt
-
-Streamlit 의존성 한 줄
-
-GitHub 저장소 화면에서 Add file → Create new file을 선택해 각 파일을 만들고 코드를 붙여 넣은 뒤 커밋하면 됩니다.
-
-3단계. Streamlit Community Cloud 배포
-① Streamlit Community Cloud 접속
-
-share.streamlit.io 에 접속한 후 GitHub 계정으로 로그인합니다.
-
-② 앱 생성
-
-Create app을 선택하고 다음 정보를 입력합니다.
-
-Repository: 본인의 ansimzone 저장소
-
-Branch: main
-
-Main file path: app.py
-
-③ Deploy
-
-Deploy를 클릭하면 의존성 설치와 앱 실행이 진행됩니다. 정상적으로 배포되면 공유할 수 있는 웹 주소가 제공됩니다.
-
-6. 배포 후 테스트 방법
-앱 왼쪽 메뉴에서 안전 구역 이름과 반경을 설정합니다.
-
-아이 위치에 안전 구역 중심 좌표를 입력하고 위치 확인하기를 누릅니다.
-
-상태가 안전으로 표시되는지 확인합니다.
-
-안전 구역 밖에 있는 위도·경도를 입력하고 다시 확인합니다.
-
-이탈 상태와 보호자 알림 센터의 이탈 기록이 생성되는지 확인합니다.
-
-CSV 다운로드로 알림 이력을 저장할 수 있는지 확인합니다.
-
-7. 현재 버전과 향후 확장 기능
-기능
-
-현재 버전
-
-안전 구역 및 반경 설정
-
-지원
-
-좌표 기반 거리 계산
-
-지원
-
-안전·이탈 판정
-
-지원
-
-이탈 및 복귀 이력
-
-지원
-
-CSV 다운로드
-
-지원
-
-실시간 GPS 자동 추적
-
-미지원
-
-실제 SMS·푸시 알림
-
-미지원
-
-앱을 닫은 뒤에도 유지되는 이력
-
-미지원
-
-실제 서비스로 발전시키려면 다음 순서가 적합합니다.
-
-1순위: 아이의 스마트폰에서 GPS 좌표를 자동으로 전송하도록 모바일 클라이언트 연결
-
-2순위: 보호자 계정과 서버 데이터베이스를 추가해 위치 및 이력 저장
-
-3순위: 이탈 이벤트가 발생하면 이메일 또는 문자 알림 전송
-
-4순위: 지도 화면과 마지막 위치 갱신 시각 표시
-
-특히 아이의 위치 정보는 민감한 개인정보이므로 보호자 인증, 전송 구간 암호화, 위치 정보 보관 기간 설정을 적용하는 것이 좋습니다.
-
-이 구성은 GitHub에 업로드해 바로 배포를 시도할 수 있는 최소 의존성의 Streamlit 앱입니다. 다만 배포 성공 여부는 실제 저장소의 파일 내용과 Streamlit Cloud의 실행 환경에 따라 달라질 수 있으며, 실제 GPS 추적 및 외부 알림 기능은 별도 구현이 필요합니다.
-
-
-
-
+with tab3:
+    st.subheader("📜 위험 이탈 기록")
+    if st.session_state.alert_history:
+        df_history = pd.DataFrame(st.session_state.alert_history)
+        st.dataframe(df_history, use_container_width=True)
+    else:
+        st.write("บัน 기록된 이탈 이력이 없습니다.")
 
      
