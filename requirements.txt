@@ -4,5 +4,4 @@ streamlit
 streamlit
 folium
 streamlit-folium
-google-generativeai
 pandas
